@@ -6,9 +6,11 @@ const GAME_WIDTH = 480;
 const GAME_HEIGHT = 800;
 const STAGE_SECONDS = 90;
 const TURTLE_COUNT = 10;
+const WAVE_SECONDS = 2.4;
+const GUIDED_TURTLE_LIMIT = 4;
 
 type Phase = "intro" | "countdown" | "playing" | "result";
-type ObstacleKind = "rock" | "log" | "crab";
+type ObstacleKind = "rock" | "log" | "crab" | "trash";
 
 type Turtle = {
   id: number;
@@ -35,6 +37,7 @@ type Obstacle = {
   hit: boolean;
   passed: boolean;
   swept: boolean;
+  waveCaught: boolean;
 };
 
 type GameState = {
@@ -132,6 +135,16 @@ function clamp(value: number, min: number, max: number) {
 
 function lerp(from: number, to: number, amount: number) {
   return from + (to - from) * amount;
+}
+
+function waveFrontY(game: GameState) {
+  const elapsed = WAVE_SECONDS - game.waveTime;
+  if (elapsed <= 0.95) {
+    const progress = clamp(elapsed / 0.95, 0, 1);
+    return lerp(-90, GAME_HEIGHT + 90, 1 - Math.pow(1 - progress, 2));
+  }
+  const progress = clamp((elapsed - 0.95) / (WAVE_SECONDS - 0.95), 0, 1);
+  return lerp(GAME_HEIGHT + 90, -120, progress * progress);
 }
 
 function roundedRect(
@@ -286,6 +299,22 @@ function drawObstacle(
     ctx.arc(5, -4, 1.1, 0, Math.PI * 2);
     ctx.fill();
   }
+
+  if (obstacle.kind === "trash") {
+    ctx.rotate(0.22 + Math.sin(time * 1.8 + obstacle.phase) * 0.08);
+    ctx.fillStyle = "#b6c6bb";
+    roundedRect(ctx, -16, -8, 32, 16, 5);
+    ctx.fill();
+    ctx.fillStyle = "#738b86";
+    roundedRect(ctx, -21, -4, 7, 8, 2);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(238, 246, 229, .55)";
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(-9, -5);
+    ctx.quadraticCurveTo(1, 1, 10, -4);
+    ctx.stroke();
+  }
   ctx.restore();
 }
 
@@ -306,21 +335,23 @@ function spawnObstacle(game: GameState) {
   const progress = game.elapsed / STAGE_SECONDS;
   const roll = Math.random();
   let kind: ObstacleKind = "rock";
-  if (progress > 0.18 && roll > 0.58) kind = "crab";
-  if (progress > 0.42 && roll > 0.78) kind = "log";
+  if (progress > 0.18 && roll > 0.72) kind = "crab";
+  else if (progress > 0.42 && roll > 0.57) kind = "log";
+  else if (progress > 0.25 && roll > 0.4) kind = "trash";
 
   const obstacle: Obstacle = {
     id: game.nextObstacleId++,
     kind,
     x: 70 + Math.random() * (GAME_WIDTH - 140),
     y: -55,
-    radius: kind === "rock" ? 26 + Math.random() * 12 : 23,
-    width: kind === "log" ? 125 + Math.random() * 55 : 46,
-    height: kind === "log" ? 28 : 46,
+    radius: kind === "rock" ? 26 + Math.random() * 12 : kind === "trash" ? 20 : 23,
+    width: kind === "log" ? 125 + Math.random() * 55 : kind === "trash" ? 36 : 46,
+    height: kind === "log" ? 28 : kind === "trash" ? 22 : 46,
     phase: Math.random() * Math.PI * 2,
     hit: false,
     passed: false,
     swept: false,
+    waveCaught: false,
   };
   game.obstacles.push(obstacle);
 
@@ -390,14 +421,14 @@ function drawGame(ctx: CanvasRenderingContext2D, game: GameState) {
     4,
     game.lightX,
     game.lightY,
-    92,
+    82,
   );
   lightGradient.addColorStop(0, "rgba(255, 249, 202, .50)");
   lightGradient.addColorStop(0.38, "rgba(255, 246, 191, .25)");
   lightGradient.addColorStop(1, "rgba(255, 247, 205, 0)");
   ctx.fillStyle = lightGradient;
   ctx.beginPath();
-  ctx.arc(game.lightX, game.lightY, 92, 0, Math.PI * 2);
+  ctx.arc(game.lightX, game.lightY, 82, 0, Math.PI * 2);
   ctx.fill();
   ctx.strokeStyle = "rgba(255, 250, 217, .52)";
   ctx.lineWidth = 1.5;
@@ -408,10 +439,15 @@ function drawGame(ctx: CanvasRenderingContext2D, game: GameState) {
   for (const turtle of game.turtles) drawTurtle(ctx, turtle, t);
 
   if (game.waveTime > 0) {
-    const waveProgress = 1 - game.waveTime / 1.6;
-    const waveY = GAME_HEIGHT + 100 - waveProgress * (GAME_HEIGHT + 220);
-    ctx.strokeStyle = `rgba(202, 250, 244, ${0.75 - waveProgress * 0.35})`;
-    ctx.lineWidth = 28;
+    const waveProgress = 1 - game.waveTime / WAVE_SECONDS;
+    const waveY = waveFrontY(game);
+    const waterGradient = ctx.createLinearGradient(0, 0, 0, Math.max(1, waveY));
+    waterGradient.addColorStop(0, "rgba(26, 86, 97, .64)");
+    waterGradient.addColorStop(1, "rgba(99, 187, 181, .48)");
+    ctx.fillStyle = waterGradient;
+    ctx.fillRect(0, 0, GAME_WIDTH, Math.max(0, waveY));
+    ctx.strokeStyle = `rgba(220, 255, 244, ${0.82 - waveProgress * 0.22})`;
+    ctx.lineWidth = 24;
     ctx.beginPath();
     for (let x = -20; x <= GAME_WIDTH + 20; x += 14) {
       const y = waveY + Math.sin(x * 0.04 + t * 8) * 12;
@@ -443,6 +479,7 @@ export default function Home() {
   const gameRef = useRef<GameState>(newGameState());
   const [phase, setPhase] = useState<Phase>("intro");
   const [hud, setHud] = useState<Hud>(initialHud);
+  const [countdownDisplay, setCountdownDisplay] = useState(3);
 
   const startGame = useCallback(() => {
     const fresh = newGameState();
@@ -451,6 +488,7 @@ export default function Home() {
     fresh.lastTime = 0;
     gameRef.current = fresh;
     setHud(initialHud);
+    setCountdownDisplay(3);
     setPhase("countdown");
   }, []);
 
@@ -458,20 +496,16 @@ export default function Home() {
     const game = gameRef.current;
     if (game.phase !== "playing" || game.charge < 3 || game.waveTime > 0) return;
     game.charge = 0;
-    game.waveTime = 1.6;
+    game.waveTime = WAVE_SECONDS;
     game.flashTime = 0.45;
     game.wavesUsed += 1;
-    game.message = "파도가 길을 열어요";
-    game.messageTime = 1.4;
+    game.message = "파도가 앞에서 밀려옵니다";
+    game.messageTime = 1.8;
     for (const turtle of game.turtles) {
       if (turtle.state !== "active") continue;
-      turtle.y -= 62;
-      turtle.invulnerable = 1.6;
+      turtle.y -= 24;
+      turtle.invulnerable = WAVE_SECONDS;
       turtle.stun = 0;
-    }
-    for (const obstacle of game.obstacles) {
-      if (obstacle.kind === "crab") obstacle.swept = true;
-      if (obstacle.kind === "log") obstacle.x += obstacle.x < GAME_WIDTH / 2 ? -46 : 46;
     }
   }, []);
 
@@ -513,6 +547,10 @@ export default function Home() {
 
       if (game.phase === "countdown") {
         game.countdown -= dt;
+        const nextCount = Math.max(1, Math.ceil(game.countdown));
+        setCountdownDisplay((current) =>
+          current === nextCount ? current : nextCount,
+        );
         if (game.countdown <= 0) {
           game.phase = "playing";
           game.lastTime = timestamp;
@@ -528,6 +566,9 @@ export default function Home() {
 
         const progress = clamp(game.elapsed / STAGE_SECONDS, 0, 1);
         const scrollSpeed = lerp(49, 72, progress);
+        const waveElapsed = WAVE_SECONDS - game.waveTime;
+        const waveIncoming = game.waveTime > 0 && waveElapsed <= 0.95;
+        const waveY = game.waveTime > 0 ? waveFrontY(game) : -120;
         game.lightX = lerp(game.lightX, game.targetX, 1 - Math.pow(0.002, dt));
         game.lightY = lerp(game.lightY, game.targetY, 1 - Math.pow(0.002, dt));
 
@@ -542,7 +583,28 @@ export default function Home() {
             obstacle.x += Math.sin(game.elapsed * 2.2 + obstacle.phase) * 26 * dt;
             obstacle.x = clamp(obstacle.x, 48, GAME_WIDTH - 48);
           }
-          if (!obstacle.passed && obstacle.y > GAME_HEIGHT + 60) {
+
+          if (
+            waveIncoming &&
+            obstacle.kind !== "rock" &&
+            !obstacle.waveCaught &&
+            waveY >= obstacle.y - 18
+          ) {
+            obstacle.waveCaught = true;
+            obstacle.hit = true;
+          }
+
+          if (game.waveTime > 0 && !waveIncoming && obstacle.waveCaught) {
+            obstacle.y -= 900 * dt;
+            obstacle.x += Math.sin(game.elapsed * 8 + obstacle.phase) * 55 * dt;
+            if (obstacle.y < -100) obstacle.swept = true;
+          }
+
+          if (
+            !obstacle.waveCaught &&
+            !obstacle.passed &&
+            obstacle.y > GAME_HEIGHT + 60
+          ) {
             obstacle.passed = true;
             if (!obstacle.hit) {
               game.charge = Math.min(3, game.charge + 1);
@@ -552,6 +614,22 @@ export default function Home() {
             }
           }
         }
+
+        const guidedIds = new Set(
+          game.turtles
+            .filter((turtle) => turtle.state === "active")
+            .map((turtle) => ({
+              id: turtle.id,
+              distance: Math.hypot(
+                game.lightX - turtle.x,
+                game.lightY - turtle.y,
+              ),
+            }))
+            .filter(({ distance }) => distance < 84)
+            .sort((a, b) => a.distance - b.distance)
+            .slice(0, GUIDED_TURTLE_LIMIT)
+            .map(({ id }) => id),
+        );
 
         for (const turtle of game.turtles) {
           if (turtle.state !== "active") continue;
@@ -566,10 +644,10 @@ export default function Home() {
             const dx = game.lightX - turtle.x;
             const dy = game.lightY - turtle.y;
             const distance = Math.max(1, Math.hypot(dx, dy));
-            const inLight = distance < 98;
-            const guideStrength = inLight ? 52 : 11;
+            const inLight = guidedIds.has(turtle.id);
+            const guideStrength = inLight ? 48 : 0;
 
-            let moveX = (dx / distance) * guideStrength;
+            let moveX = inLight ? (dx / distance) * guideStrength : 0;
             let moveY = -22 + (dy / distance) * guideStrength;
 
             for (const other of game.turtles) {
@@ -577,14 +655,14 @@ export default function Home() {
               const sx = turtle.x - other.x;
               const sy = turtle.y - other.y;
               const sd = Math.max(1, Math.hypot(sx, sy));
-              if (sd < 28) {
-                moveX += (sx / sd) * (28 - sd) * 1.25;
-                moveY += (sy / sd) * (28 - sd) * 0.55;
+              if (sd < 34) {
+                moveX += (sx / sd) * (34 - sd) * 1.75;
+                moveY += (sy / sd) * (34 - sd) * 0.7;
               }
             }
 
             const magnitude = Math.max(1, Math.hypot(moveX, moveY));
-            const velocity = (inLight ? 49 : 28) * turtle.speed;
+            const velocity = (inLight ? 46 : 27) * turtle.speed;
             turtle.x += (moveX / magnitude) * velocity * dt;
             turtle.y += (moveY / magnitude) * velocity * dt;
             turtle.y += scrollSpeed * 0.16 * dt;
@@ -601,13 +679,15 @@ export default function Home() {
               obstacleCollision(turtle, obstacle)
             ) {
               turtle.lastHits.add(obstacle.id);
-              turtle.stun = 1.2;
-              turtle.y += 22;
+              turtle.state = "lost";
               obstacle.hit = true;
-              game.message = "달빛으로 일으켜 주세요";
-              game.messageTime = 1.25;
+              game.message = "한 마리가 무리에서 사라졌어요";
+              game.messageTime = 1.45;
+              break;
             }
           }
+
+          if (turtle.state !== "active") continue;
 
           if (turtle.y > GAME_HEIGHT + 22) {
             turtle.state = "lost";
@@ -682,7 +762,7 @@ export default function Home() {
           <span className="rule-number">01</span>
           <div>
             <strong>달빛을 옮겨요</strong>
-            <p>마우스를 천천히 움직여 무리가 흩어지지 않게 이끄세요.</p>
+            <p>가장 가까운 네 마리만 따라옵니다. 무리를 번갈아 이끄세요.</p>
           </div>
         </div>
         <div className="story-rule">
@@ -696,7 +776,7 @@ export default function Home() {
           <span className="rule-number">03</span>
           <div>
             <strong>파도를 불러요</strong>
-            <p>세 칸이 차면 Space를 눌러 위기를 벗어나세요.</p>
+            <p>세 칸이 차면 Space를 눌러 앞의 위험을 바다로 돌려보내세요.</p>
           </div>
         </div>
 
@@ -741,7 +821,7 @@ export default function Home() {
 
           {phase === "countdown" && (
             <div className="countdown" aria-live="polite">
-              <span>{Math.max(1, Math.ceil(gameRef.current.countdown))}</span>
+              <span>{countdownDisplay}</span>
               <p>달빛을 준비하세요</p>
             </div>
           )}
