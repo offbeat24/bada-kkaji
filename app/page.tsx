@@ -7,7 +7,7 @@ const GAME_HEIGHT = 800;
 const STAGE_SECONDS = 90;
 const TURTLE_COUNT = 10;
 const WAVE_SECONDS = 2.4;
-const GUIDED_TURTLE_LIMIT = 4;
+const LIGHT_RADIUS = 82;
 const TURTLE_BAND_Y = 570;
 
 type Phase = "intro" | "countdown" | "playing" | "result";
@@ -19,6 +19,9 @@ type Turtle = {
   y: number;
   speed: number;
   angle: number;
+  vx: number;
+  vy: number;
+  reaction: number;
   stun: number;
   invulnerable: number;
   state: "active" | "lost" | "rescued";
@@ -96,6 +99,9 @@ function makeTurtles(): Turtle[] {
       y: 645 + row * 42 + Math.random() * 8,
       speed: 0.9 + Math.random() * 0.2,
       angle: -Math.PI / 2,
+      vx: 0,
+      vy: -8,
+      reaction: 0.82 + Math.random() * 0.36,
       stun: 0,
       invulnerable: 0,
       state: "active",
@@ -422,14 +428,14 @@ function drawGame(ctx: CanvasRenderingContext2D, game: GameState) {
     4,
     game.lightX,
     game.lightY,
-    82,
+    LIGHT_RADIUS,
   );
   lightGradient.addColorStop(0, "rgba(255, 249, 202, .50)");
   lightGradient.addColorStop(0.38, "rgba(255, 246, 191, .25)");
   lightGradient.addColorStop(1, "rgba(255, 247, 205, 0)");
   ctx.fillStyle = lightGradient;
   ctx.beginPath();
-  ctx.arc(game.lightX, game.lightY, 82, 0, Math.PI * 2);
+  ctx.arc(game.lightX, game.lightY, LIGHT_RADIUS, 0, Math.PI * 2);
   ctx.fill();
   ctx.strokeStyle = "rgba(255, 250, 217, .52)";
   ctx.lineWidth = 1.5;
@@ -616,22 +622,6 @@ export default function Home() {
           }
         }
 
-        const guidedIds = new Set(
-          game.turtles
-            .filter((turtle) => turtle.state === "active")
-            .map((turtle) => ({
-              id: turtle.id,
-              distance: Math.hypot(
-                game.lightX - turtle.x,
-                game.lightY - turtle.y,
-              ),
-            }))
-            .filter(({ distance }) => distance < 84)
-            .sort((a, b) => a.distance - b.distance)
-            .slice(0, GUIDED_TURTLE_LIMIT)
-            .map(({ id }) => id),
-        );
-
         for (const turtle of game.turtles) {
           if (turtle.state !== "active") continue;
           turtle.stun = Math.max(0, turtle.stun - dt);
@@ -645,18 +635,23 @@ export default function Home() {
             const dx = game.lightX - turtle.x;
             const dy = game.lightY - turtle.y;
             const distance = Math.max(1, Math.hypot(dx, dy));
-            const inLight = guidedIds.has(turtle.id);
-            let moveX = inLight ? (dx / distance) * 28 : 0;
+            const lightInfluence = Math.pow(
+              clamp(1 - distance / LIGHT_RADIUS, 0, 1),
+              1.25,
+            );
+            let moveX = (dx / distance) * 34 * lightInfluence;
             let moveY =
               -2 +
               (TURTLE_BAND_Y - turtle.y) * 0.22 +
-              (inLight ? (dy / distance) * 8 : 0);
+              (dy / distance) * 9 * lightInfluence;
+            let nearbyTurtles = 0;
 
             for (const other of game.turtles) {
               if (other.id === turtle.id || other.state !== "active") continue;
               const sx = turtle.x - other.x;
               const sy = turtle.y - other.y;
               const sd = Math.max(1, Math.hypot(sx, sy));
+              if (sd < 52) nearbyTurtles += 1;
               if (sd < 34) {
                 moveX += (sx / sd) * (34 - sd) * 1.25;
                 moveY += (sy / sd) * (34 - sd) * 0.45;
@@ -664,12 +659,24 @@ export default function Home() {
             }
 
             const magnitude = Math.max(1, Math.hypot(moveX, moveY));
-            const maxVelocity = inLight ? 34 : 18;
+            const crowdingSlowdown = clamp(
+              1 - nearbyTurtles * 0.1,
+              0.45,
+              1,
+            );
+            const maxVelocity =
+              (18 + lightInfluence * 16) * crowdingSlowdown;
             const velocityScale =
               magnitude > maxVelocity ? maxVelocity / magnitude : 1;
-            turtle.x += moveX * velocityScale * turtle.speed * dt;
-            turtle.y += moveY * velocityScale * turtle.speed * dt;
-            turtle.angle = Math.atan2(moveY, moveX);
+            const desiredVx = moveX * velocityScale;
+            const desiredVy = moveY * velocityScale;
+            const response =
+              1 - Math.pow(0.09, dt * turtle.reaction);
+            turtle.vx = lerp(turtle.vx, desiredVx, response);
+            turtle.vy = lerp(turtle.vy, desiredVy, response);
+            turtle.x += turtle.vx * turtle.speed * dt;
+            turtle.y += turtle.vy * turtle.speed * dt;
+            turtle.angle = Math.atan2(turtle.vy, turtle.vx);
           }
 
           turtle.x = clamp(turtle.x, 38, GAME_WIDTH - 38);
@@ -765,7 +772,7 @@ export default function Home() {
           <span className="rule-number">01</span>
           <div>
             <strong>달빛을 옮겨요</strong>
-            <p>가장 가까운 네 마리를 좌우로 이끌어 장애물에 대응하세요.</p>
+            <p>중심에 가까울수록 강하게 반응하고, 뭉치면 느려집니다.</p>
           </div>
         </div>
         <div className="story-rule">
