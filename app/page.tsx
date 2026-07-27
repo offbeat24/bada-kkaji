@@ -8,6 +8,7 @@ const STAGE_SECONDS = 90;
 const TURTLE_COUNT = 10;
 const WAVE_SECONDS = 2.4;
 const GUIDED_TURTLE_LIMIT = 4;
+const TURTLE_BAND_Y = 570;
 
 type Phase = "intro" | "countdown" | "playing" | "result";
 type ObstacleKind = "rock" | "log" | "crab" | "trash";
@@ -645,10 +646,11 @@ export default function Home() {
             const dy = game.lightY - turtle.y;
             const distance = Math.max(1, Math.hypot(dx, dy));
             const inLight = guidedIds.has(turtle.id);
-            const guideStrength = inLight ? 48 : 0;
-
-            let moveX = inLight ? (dx / distance) * guideStrength : 0;
-            let moveY = -22 + (dy / distance) * guideStrength;
+            let moveX = inLight ? (dx / distance) * 28 : 0;
+            let moveY =
+              -2 +
+              (TURTLE_BAND_Y - turtle.y) * 0.22 +
+              (inLight ? (dy / distance) * 8 : 0);
 
             for (const other of game.turtles) {
               if (other.id === turtle.id || other.state !== "active") continue;
@@ -656,21 +658,22 @@ export default function Home() {
               const sy = turtle.y - other.y;
               const sd = Math.max(1, Math.hypot(sx, sy));
               if (sd < 34) {
-                moveX += (sx / sd) * (34 - sd) * 1.75;
-                moveY += (sy / sd) * (34 - sd) * 0.7;
+                moveX += (sx / sd) * (34 - sd) * 1.25;
+                moveY += (sy / sd) * (34 - sd) * 0.45;
               }
             }
 
             const magnitude = Math.max(1, Math.hypot(moveX, moveY));
-            const velocity = (inLight ? 46 : 27) * turtle.speed;
-            turtle.x += (moveX / magnitude) * velocity * dt;
-            turtle.y += (moveY / magnitude) * velocity * dt;
-            turtle.y += scrollSpeed * 0.16 * dt;
+            const maxVelocity = inLight ? 34 : 18;
+            const velocityScale =
+              magnitude > maxVelocity ? maxVelocity / magnitude : 1;
+            turtle.x += moveX * velocityScale * turtle.speed * dt;
+            turtle.y += moveY * velocityScale * turtle.speed * dt;
             turtle.angle = Math.atan2(moveY, moveX);
           }
 
           turtle.x = clamp(turtle.x, 38, GAME_WIDTH - 38);
-          turtle.y = Math.max(88, turtle.y);
+          turtle.y = Math.max(420, turtle.y);
 
           for (const obstacle of game.obstacles) {
             if (
@@ -762,7 +765,7 @@ export default function Home() {
           <span className="rule-number">01</span>
           <div>
             <strong>달빛을 옮겨요</strong>
-            <p>가장 가까운 네 마리만 따라옵니다. 무리를 번갈아 이끄세요.</p>
+            <p>가장 가까운 네 마리를 좌우로 이끌어 장애물에 대응하세요.</p>
           </div>
         </div>
         <div className="story-rule">
