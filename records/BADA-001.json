@@ -1,0 +1,115 @@
+{
+  "task_id": "BADA-001",
+  "summary_of_changes": "Pinned Node.js 22.23.1 and connected bada-kkaji to the local BASS 0.1.1 NAN harness.",
+  "why": "The project requires Node.js 22.13 or newer and needed durable BASS configuration before committing.",
+  "files_changed": [
+    ".nvmrc",
+    "package.json",
+    "package-lock.json",
+    "tools/bass-platform-0.1.1.tgz",
+    "bass.yaml",
+    "AGENTS.md",
+    ".cursor/rules/bass.mdc",
+    "CLAUDE.md",
+    "DESIGN.md",
+    "nan2026.yaml",
+    "nan/AGENT_WORKFLOW.md",
+    "nan/acceptance.yaml",
+    "nan/concepts/CON-001.yaml",
+    "nan/gates.yaml",
+    "nan/team.yaml",
+    "nan/trace.yaml",
+    ".bass/nan2026-manifest.json",
+    ".bass/nan2026/protection-lock.json",
+    ".github/workflows/nan2026.yml",
+    "docs/submission/README.md",
+    "docs/submission/ai-use-log.yaml",
+    "evidence/README.md",
+    "tasks/BADA-001.md",
+    "records/BADA-001.json"
+  ],
+  "models_used": [
+    {
+      "role": "worker",
+      "alias": "fast-reliable",
+      "actual_model": "gpt-5.6-sol",
+      "followed_recommendation": false
+    }
+  ],
+  "verification": {
+    "evaluations_run": [
+      {
+        "name": "node-version-22.23.1",
+        "level": 1,
+        "status": "pass"
+      },
+      {
+        "name": "npm-ci",
+        "level": 1,
+        "status": "pass"
+      },
+      {
+        "name": "bass-doctor",
+        "level": 1,
+        "status": "pass"
+      },
+      {
+        "name": "nan-trace-validate",
+        "level": 1,
+        "status": "pass"
+      },
+      {
+        "name": "nan-protect-verify",
+        "level": 1,
+        "status": "pass"
+      },
+      {
+        "name": "game-build",
+        "level": 2,
+        "status": "pass"
+      }
+    ],
+    "not_verified": [
+      "npm test completion: tests/rendered-html.test.mjs is missing after the successful build phase",
+      "npm run lint: existing react-hooks/immutability error at app/page.tsx:513"
+    ]
+  },
+  "critic_findings": {
+    "total": 0,
+    "open_high_or_medium": 0
+  },
+  "human_approval": {
+    "approved": true,
+    "approver": "user",
+    "at": "2026-07-28T09:12:10Z",
+    "notes": "User explicitly requested the Node version change and local game commit. Existing test and lint failures are recorded without being represented as passing."
+  },
+  "known_limitations": [
+    "The package test script references a missing rendered HTML test file.",
+    "The existing game page has one React hooks immutability lint error.",
+    "npm audit reports 18 dependency vulnerabilities; no automatic audit fix was applied."
+  ],
+  "out_of_scope_findings": [],
+  "docs_updated": {
+    "needed": true,
+    "updated": [
+      "AGENTS.md",
+      "DESIGN.md",
+      "nan/AGENT_WORKFLOW.md",
+      "tasks/BADA-001.md"
+    ]
+  },
+  "lessons": {
+    "recorded": true,
+    "candidates": [
+      "Pin the project Node version before validating generated vinext projects."
+    ]
+  },
+  "rollback": {
+    "method": "Revert the setup commit and switch back with `nvm use 20.19.0`."
+  },
+  "design": {
+    "rendered_verification": false,
+    "notes": "No gameplay or UI source was changed in this maintenance task."
+  }
+}

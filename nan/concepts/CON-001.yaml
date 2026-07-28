@@ -1,0 +1,27 @@
+id: CON-001
+title: Replace with a theme-derived concept
+summary: Describe the playable loop in one sentence.
+tags: [simple, 2d, web]
+axes:
+  space: bounded arena
+  coreVerb: connect
+  systemBehavior: cascading response
+  pressure: shrinking time window
+  themeCoupling: explain why removing the theme breaks the mechanic
+  visualReward: readable chain reaction
+representativeScene: Describe the one scene that sells the concept.
+newCoreSystems: [core-loop]
+hardGates:
+  theme-is-mechanic: false
+  one-sentence-playable-loop: false
+  representative-scene: false
+  vertical-slice-in-six-hours: false
+  maximum-two-new-core-systems: true
+  visible-player-feedback: false
+  shippable-evidence: false
+score:
+  theme: 0
+  playability: 0
+  novelty: 0
+  feasibility: 0
+  visualClarity: 0
